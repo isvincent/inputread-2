@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#24345f">
+  <meta name="description" content="點選注音符號、轉成國字，再使用瀏覽器語音朗讀。">
+  <title>注音轉國字朗讀器</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%2324345f'/%3E%3Cpath d='M18 13h26v9H29v9h13v9H29v11H18z' fill='%23fff'/%3E%3Ccircle cx='47' cy='48' r='6' fill='%23ffb23e'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #18233f;
+      --muted: #66708a;
+      --navy: #24345f;
+      --blue: #4169a8;
+      --paper: #f7f4ed;
+      --card: #fffdf8;
+      --orange: #f39a2d;
+      --orange-soft: #fff0d7;
+      --mint: #dff3e9;
+      --line: #d8d9df;
+      --shadow: 0 18px 45px rgba(25, 35, 63, .12);
+    }
+
+    * { box-sizing: border-box; }
+
+    .skip-link {
+      position: fixed;
+      z-index: 9999;
+      top: 8px;
+      left: 8px;
+      transform: translateY(-150%);
+      padding: 12px 18px;
+      border-radius: 8px;
+      background: #fff;
+      color: #111;
+      font-weight: 800;
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    .sr-only {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+
+    html { font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif; background: var(--paper); }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        linear-gradient(rgba(65, 105, 168, .055) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(65, 105, 168, .055) 1px, transparent 1px),
+        var(--paper);
+      background-size: 28px 28px;
+    }
+
+    button, select { font: inherit; }
+    button { touch-action: manipulation; }
+
+    .topbar {
+      background: var(--navy);
+      color: white;
+      padding: 10px max(18px, calc((100vw - 1500px) / 2));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; font-weight: 800; letter-spacing: .04em; }
+    .brand-mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--orange); color: var(--navy); font-size: 1.35rem; }
+    .privacy { font-size: .875rem; color: #dce5ff; }
+
+    .top-actions { display: flex; align-items: center; gap: 8px; }
+    .access-button {
+      min-width: 46px;
+      min-height: 44px;
+      padding: 7px 12px;
+      border: 2px solid #dce5ff;
+      border-radius: 9px;
+      background: transparent;
+      color: #fff;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .access-button[aria-pressed="true"] { background: #fff; color: #172446; }
+
+    main { width: min(1500px, calc(100% - 32px)); margin: 22px auto 40px; }
+
+    .intro { display: flex; align-items: end; justify-content: space-between; gap: 28px; margin-bottom: 20px; }
+    h1 { margin: 0 0 6px; font-family: "Noto Serif TC", "PMingLiU", serif; font-size: clamp(2rem, 4vw, 3.15rem); line-height: 1.08; letter-spacing: -.02em; }
+    .intro p { margin: 0; color: var(--muted); font-size: 1.05rem; line-height: 1.7; }
+    .steps { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+    .step { padding: 8px 12px; border: 1px solid #cfd4df; border-radius: 999px; background: rgba(255,255,255,.7); color: var(--navy); font-size: .9rem; font-weight: 700; white-space: nowrap; }
+    .step b { color: var(--orange); margin-right: 5px; }
+
+    .workspace { display: grid; grid-template-columns: minmax(680px, 1.55fr) minmax(360px, .65fr); gap: 18px; align-items: start; }
+    .panel { background: var(--card); border: 1px solid rgba(36, 52, 95, .14); border-radius: 22px; box-shadow: var(--shadow); overflow: hidden; }
+    .panel-head { padding: 18px 20px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .panel-head h2 { margin: 0; font-size: 1.1rem; }
+    .hint { color: var(--muted); font-size: .86rem; }
+
+    .input-display { margin: 18px 20px 8px; min-height: 98px; border: 2px dashed #b9c1d5; border-radius: 16px; background: #f8faff; padding: 14px; display: flex; flex-wrap: wrap; align-content: center; gap: 9px; }
+    .placeholder { width: 100%; color: #8a93a8; text-align: center; font-size: 1rem; }
+    .syllable-chip { display: inline-flex; align-items: center; min-height: 52px; padding: 6px 13px; border-radius: 12px; background: var(--navy); color: white; font-size: 1.6rem; font-weight: 800; box-shadow: 0 5px 0 #15203f; }
+    .syllable-chip.current { background: white; color: var(--navy); outline: 3px solid var(--orange); box-shadow: 0 5px 0 #d77812; }
+
+    .input-tools { padding: 6px 20px 15px; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .mini-actions { display: flex; gap: 8px; }
+    .text-button { border: 0; background: transparent; color: var(--blue); font-weight: 750; padding: 9px 8px; border-radius: 8px; cursor: pointer; }
+    .text-button:hover { background: #edf2ff; }
+    .key-count { color: var(--muted); font-size: .88rem; }
+
+    .keyboard { padding: 10px 20px 20px; }
+    .keyboard-heading { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin: 0 0 9px; }
+    .keyboard-heading h3 { margin: 0; font-size: 1rem; }
+    .keyboard-heading span { color: var(--muted); font-size: .875rem; }
+    .computer-keyboard { display: grid; gap: 8px; }
+    .keyboard-row { display: grid; gap: 8px; }
+    .keyboard-row.row-1 { grid-template-columns: repeat(11, minmax(54px, 1fr)); }
+    .keyboard-row.row-2 { grid-template-columns: repeat(10, minmax(54px, 1fr)); padding-left: 2.5%; }
+    .keyboard-row.row-3 { grid-template-columns: repeat(10, minmax(54px, 1fr)); padding-left: 5%; }
+    .keyboard-row.row-4 { grid-template-columns: repeat(10, minmax(54px, 1fr)); padding-left: 8%; }
+    .key { position: relative; min-height: 62px; border: 2px solid #bac3d5; border-radius: 11px; background: white; color: var(--navy); font-size: 1.55rem; font-weight: 800; cursor: pointer; box-shadow: 0 4px 0 #b6bdcb; transition: transform .08s ease, box-shadow .08s ease, background .15s ease; }
+    .key-main { display: block; line-height: 1.15; }
+    .key-legend { position: absolute; top: 4px; right: 7px; color: #59657f; font-size: .7rem; font-weight: 700; }
+    .key:hover { background: #eef3ff; }
+    .key:active { transform: translateY(2px); box-shadow: 0 1px 0 #c6cbd6; }
+    .key.tone { color: #a84d00; background: var(--orange-soft); border-color: #f5c986; }
+    .commit-row { display: flex; gap: 10px; margin-top: 16px; }
+    .primary, .secondary, .speak { min-height: 52px; border-radius: 12px; border: 0; padding: 10px 18px; font-weight: 800; cursor: pointer; }
+    .primary { flex: 1; color: white; background: var(--navy); box-shadow: 0 4px 0 #111b37; }
+    .secondary { background: #edf0f5; color: var(--ink); }
+    .primary:disabled, .speak:disabled { opacity: .42; cursor: not-allowed; box-shadow: none; }
+
+    .result-card { padding: 22px; }
+    .result-label { margin: 0 0 8px; color: var(--muted); font-size: .9rem; font-weight: 700; }
+    .hanzi { min-height: 112px; display: flex; align-items: center; flex-wrap: wrap; gap: 5px; font-family: "Noto Serif TC", "PMingLiU", serif; font-size: clamp(3rem, 8vw, 5rem); font-weight: 800; color: var(--navy); letter-spacing: .06em; border-bottom: 3px solid var(--orange); }
+    .empty-result { font-family: inherit; font-size: 1rem; color: #959cae; font-weight: 500; letter-spacing: 0; }
+    .result-note { min-height: 44px; margin: 12px 0 14px; color: var(--muted); line-height: 1.55; font-size: .9rem; }
+    .candidate-zone { margin: 12px 0 18px; }
+    .candidate-title { margin: 0 0 8px; font-size: .9rem; color: var(--muted); }
+    .candidates { display: flex; flex-wrap: wrap; gap: 7px; min-height: 42px; }
+    .candidate { width: 42px; height: 42px; border-radius: 9px; border: 1px solid #c7ccda; background: white; color: var(--navy); font-size: 1.25rem; font-weight: 800; cursor: pointer; }
+    .candidate.selected { color: white; background: var(--blue); border-color: var(--blue); }
+    .speech-controls { display: grid; gap: 10px; }
+    .voice-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    select { width: 100%; min-width: 0; min-height: 44px; padding: 7px 10px; border-radius: 10px; border: 1px solid #c7ccda; background: white; color: var(--ink); }
+    .rate { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .88rem; }
+    input[type="range"] { width: 92px; accent-color: var(--orange); }
+    .speak { width: 100%; background: var(--orange); color: #322000; box-shadow: 0 4px 0 #c56c09; font-size: 1.08rem; }
+    .status { margin: 10px 0 0; min-height: 24px; text-align: center; color: var(--muted); font-size: .88rem; }
+
+    .help { margin-top: 18px; padding: 15px 18px; border-left: 4px solid var(--orange); background: rgba(255,255,255,.72); border-radius: 0 12px 12px 0; color: var(--muted); line-height: 1.6; font-size: .92rem; }
+    .help strong { color: var(--ink); }
+
+    body.large-text { font-size: 1.14rem; }
+    body.large-text .hint, body.large-text .result-label, body.large-text .candidate-title, body.large-text .status { font-size: 1rem; }
+
+    body.high-contrast {
+      --ink: #000;
+      --muted: #1f2937;
+      --navy: #071a52;
+      --blue: #003b9b;
+      --paper: #fff;
+      --card: #fff;
+      --orange: #ffb000;
+      --orange-soft: #fff0b3;
+      --line: #111;
+      --shadow: 0 0 0 2px #111;
+    }
+    body.high-contrast .panel, body.high-contrast .key, body.high-contrast select { border-color: #111; }
+
+    :focus-visible { outline: 4px solid #63a7ff; outline-offset: 2px; }
+
+    @media (max-width: 1050px) {
+      .intro { align-items: flex-start; flex-direction: column; }
+      .steps { justify-content: flex-start; }
+      .workspace { grid-template-columns: 1fr; }
+      .result-panel { order: -1; }
+    }
+
+    @media (max-width: 560px) {
+      .topbar { padding: 10px 14px; }
+      .privacy { display: none; }
+      .access-button { min-width: 44px; padding: 6px 9px; }
+      main { width: min(100% - 20px, 1180px); margin-top: 20px; }
+      .steps { gap: 5px; }
+      .step { font-size: .8rem; padding: 6px 9px; }
+      .panel { border-radius: 16px; }
+      .input-display, .keyboard { margin-left: 12px; margin-right: 12px; }
+      .keyboard { padding-left: 12px; padding-right: 12px; overflow-x: auto; }
+      .computer-keyboard { min-width: 720px; padding: 2px 2px 8px; }
+      .keyboard-row { gap: 6px; }
+      .key { min-height: 54px; }
+      .input-tools { padding-left: 12px; padding-right: 12px; }
+    }
+
+    @media (min-width: 1200px) and (aspect-ratio: 16 / 10) {
+      .intro { margin-bottom: 14px; }
+      .input-display { min-height: 80px; margin-top: 14px; }
+      .panel-head { padding-top: 14px; padding-bottom: 12px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#mainContent">跳到主要內容</a>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">ㄅ</span><span>注音轉國字朗讀器</span></div>
+    <div class="top-actions" aria-label="無障礙顯示設定">
+      <span class="privacy">所有處理都在這台裝置完成</span>
+      <button id="largeText" class="access-button" type="button" aria-pressed="false" title="切換大字模式">大字</button>
+      <button id="highContrast" class="access-button" type="button" aria-pressed="false" title="切換高對比模式">對比</button>
+    </div>
+  </header>
+
+  <main id="mainContent" tabindex="-1">
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <h1 id="page-title">點注音，聽見國字</h1>
+        <p>依序點選注音，加入音節後轉成國字；需要時可改選同音字。</p>
+      </div>
+      <div class="steps" aria-label="操作步驟">
+        <span class="step"><b>1</b>點注音</span>
+        <span class="step"><b>2</b>轉國字</span>
+        <span class="step"><b>3</b>按下朗讀</span>
+      </div>
+    </section>
+
+    <div class="workspace">
+      <section class="panel input-panel" aria-labelledby="input-title">
+        <div class="panel-head">
+          <h2 id="input-title">注音輸入區</h2>
+          <span class="hint">聲調可省略為一聲</span>
+        </div>
+        <p id="keyboardInstructions" class="sr-only">可點選螢幕鍵盤，也可使用實體鍵盤上對應的英數按鍵。每個按鍵會朗讀其注音與鍵盤位置。</p>
+        <div id="inputDisplay" class="input-display" role="status" aria-live="polite" aria-atomic="false"><span class="placeholder">請從下方點選注音符號</span></div>
+        <div class="input-tools">
+          <span id="keyCount" class="key-count">已輸入 0 個符號</span>
+          <div class="mini-actions">
+            <button id="backspace" class="text-button" type="button" aria-label="刪除上一個符號">⌫ 刪除</button>
+            <button id="clearAll" class="text-button" type="button">全部清除</button>
+          </div>
+        </div>
+        <div class="keyboard" aria-label="電腦鍵盤配置的螢幕注音鍵盤" aria-describedby="keyboardInstructions">
+          <div class="keyboard-heading"><h3>標準電腦鍵盤排列</h3><span>右上角為實體鍵盤按鍵</span></div>
+          <div id="computerKeyboard" class="computer-keyboard"></div>
+          <div class="commit-row">
+            <button id="commitSyllable" class="secondary" type="button">加入音節</button>
+            <button id="convert" class="primary" type="button" disabled>轉成國字</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel result-panel" aria-labelledby="result-title">
+        <div class="panel-head"><h2 id="result-title">國字與朗讀</h2><span class="hint">Web Speech API</span></div>
+        <div class="result-card">
+          <p class="result-label">轉換結果</p>
+          <div id="hanzi" class="hanzi" aria-live="polite" aria-atomic="true"><span class="empty-result">國字會顯示在這裡</span></div>
+          <p id="resultNote" class="result-note">輸入一個或多個音節，再按「轉成國字」。</p>
+          <div class="candidate-zone">
+            <p class="candidate-title">同音候選字</p>
+            <div id="candidates" class="candidates"><span class="hint">轉換後可在此改選</span></div>
+          </div>
+          <div class="speech-controls">
+            <div class="voice-row">
+              <label><span class="hint">語音</span><select id="voiceSelect" aria-label="選擇語音"><option>載入可用語音中…</option></select></label>
+              <label class="rate">語速 <input id="rate" type="range" min="0.6" max="1.3" value="0.9" step="0.1"><output id="rateValue">0.9×</output></label>
+            </div>
+            <button id="speak" class="speak" type="button" disabled>🔊 朗讀國字</button>
+          </div>
+          <p id="speechStatus" class="status" aria-live="polite"></p>
+        </div>
+      </section>
+    </div>
+
+    <aside class="help"><strong>小提醒：</strong>注音轉國字可能有同音字，系統會先選常用字。點選「同音候選字」即可更換。若裝置沒有中文語音，可改用最新版 Chrome、Edge 或 Safari。</aside>
+  </main>
+
+  <script>
+    const groups = { tones: ['ˉ', 'ˊ', 'ˇ', 'ˋ', '˙'] };
+    const keyboardRows = [
+      [['ㄅ','1'],['ㄉ','2'],['ˇ','3'],['ˋ','4'],['ㄓ','5'],['ˊ','6'],['˙','7'],['ㄚ','8'],['ㄞ','9'],['ㄢ','0'],['ㄦ','-']],
+      [['ㄆ','Q'],['ㄊ','W'],['ㄍ','E'],['ㄐ','R'],['ㄔ','T'],['ㄗ','Y'],['ㄧ','U'],['ㄛ','I'],['ㄟ','O'],['ㄣ','P']],
+      [['ㄇ','A'],['ㄋ','S'],['ㄎ','D'],['ㄑ','F'],['ㄕ','G'],['ㄘ','H'],['ㄨ','J'],['ㄜ','K'],['ㄠ','L'],['ㄤ',';']],
+      [['ㄈ','Z'],['ㄌ','X'],['ㄏ','C'],['ㄒ','V'],['ㄖ','B'],['ㄙ','N'],['ㄩ','M'],['ㄝ',','],['ㄡ','.'],['ㄥ','/']]
+    ];
+    const physicalKeyMap = Object.fromEntries(keyboardRows.flat().map(([symbol, key]) => [key.toLowerCase(), symbol]));
+    const toneNames = { 'ˉ': '一聲', 'ˊ': '二聲', 'ˇ': '三聲', 'ˋ': '四聲', '˙': '輕聲' };
+
+    // 常用國字候選。鍵值包含聲調；未列聲調時會回退到無調號候選。
+    const dictionary = {
+      'ㄅㄚ':'八巴吧芭', 'ㄅㄚˊ':'拔跋', 'ㄅㄚˇ':'把靶', 'ㄅㄚˋ':'爸霸罷',
+      'ㄅㄞˊ':'白', 'ㄅㄞˇ':'百擺', 'ㄅㄞˋ':'拜敗', 'ㄅㄢ':'班般斑', 'ㄅㄢˇ':'板版', 'ㄅㄢˋ':'半辦伴',
+      'ㄅㄤ':'幫邦', 'ㄅㄤˇ':'榜綁', 'ㄅㄤˋ':'棒傍', 'ㄅㄟ':'杯悲', 'ㄅㄟˇ':'北', 'ㄅㄟˋ':'被背倍備',
+      'ㄅㄣˇ':'本', 'ㄅㄥ':'崩', 'ㄅㄧ':'逼', 'ㄅㄧˇ':'比筆彼', 'ㄅㄧˋ':'必畢壁避', 'ㄅㄧㄢ':'邊編', 'ㄅㄧㄢˇ':'扁', 'ㄅㄧㄢˋ':'變便遍',
+      'ㄅㄧㄠ':'標表', 'ㄅㄧㄝˊ':'別', 'ㄅㄧㄣ':'賓彬', 'ㄅㄧㄥ':'冰兵', 'ㄅㄧㄥˇ':'餅丙', 'ㄅㄛ':'波玻', 'ㄅㄛˊ':'博伯', 'ㄅㄨˋ':'不步部布',
+      'ㄆㄚ':'趴', 'ㄆㄚˊ':'爬', 'ㄆㄚˋ':'怕', 'ㄆㄞ':'拍', 'ㄆㄞˊ':'排牌', 'ㄆㄞˋ':'派', 'ㄆㄠ':'拋', 'ㄆㄠˇ':'跑', 'ㄆㄠˋ':'泡炮',
+      'ㄆㄟˊ':'陪培', 'ㄆㄥˊ':'朋棚', 'ㄆㄧ':'批披', 'ㄆㄧˊ':'皮疲', 'ㄆㄧㄢ':'篇偏', 'ㄆㄧㄠˋ':'票漂亮', 'ㄆㄧㄣˇ':'品', 'ㄆㄧㄥˊ':'平瓶', 'ㄆㄛ':'坡', 'ㄆㄛˋ':'破', 'ㄆㄨˊ':'葡僕',
+      'ㄇㄚ':'媽', 'ㄇㄚˊ':'麻', 'ㄇㄚˇ':'馬碼', 'ㄇㄚˋ':'罵', 'ㄇㄚ˙':'嗎嘛', 'ㄇㄞˇ':'買', 'ㄇㄞˋ':'賣麥', 'ㄇㄢˇ':'滿', 'ㄇㄢˋ':'慢漫',
+      'ㄇㄤˊ':'忙盲', 'ㄇㄠ':'貓', 'ㄇㄠˊ':'毛', 'ㄇㄠˋ':'帽冒', 'ㄇㄟˊ':'沒梅眉', 'ㄇㄟˇ':'美每', 'ㄇㄟˋ':'妹', 'ㄇㄣˊ':'門', 'ㄇㄣ˙':'們',
+      'ㄇㄥˋ':'夢', 'ㄇㄧˇ':'米', 'ㄇㄧˋ':'密蜜', 'ㄇㄧㄢˋ':'面麵', 'ㄇㄧㄠˇ':'秒', 'ㄇㄧㄣˊ':'民', 'ㄇㄧㄥˊ':'名明', 'ㄇㄛˋ':'末莫默', 'ㄇㄨˇ':'母', 'ㄇㄨˋ':'目木',
+      'ㄈㄚ':'發', 'ㄈㄚˇ':'法', 'ㄈㄢ':'番翻', 'ㄈㄢˊ':'凡煩', 'ㄈㄢˇ':'反返', 'ㄈㄢˋ':'飯範', 'ㄈㄤ':'方芳', 'ㄈㄤˊ':'房防', 'ㄈㄤˇ':'訪仿', 'ㄈㄤˋ':'放',
+      'ㄈㄟ':'飛非', 'ㄈㄟˊ':'肥', 'ㄈㄟˇ':'匪', 'ㄈㄟˋ':'費廢', 'ㄈㄣ':'分', 'ㄈㄣˇ':'粉', 'ㄈㄣˋ':'份奮', 'ㄈㄥ':'風豐', 'ㄈㄥˊ':'逢', 'ㄈㄥˋ':'鳳奉', 'ㄈㄛˊ':'佛', 'ㄈㄨ':'夫膚', 'ㄈㄨˊ':'福服符', 'ㄈㄨˇ':'府父腐', 'ㄈㄨˋ':'父付負富',
+      'ㄉㄚ':'搭', 'ㄉㄚˊ':'答達', 'ㄉㄚˇ':'打', 'ㄉㄚˋ':'大', 'ㄉㄞ':'呆', 'ㄉㄞˋ':'帶代待', 'ㄉㄢ':'單丹', 'ㄉㄢˇ':'膽', 'ㄉㄢˋ':'但蛋淡',
+      'ㄉㄤ':'當', 'ㄉㄤˇ':'黨', 'ㄉㄤˋ':'盪檔', 'ㄉㄠ':'刀', 'ㄉㄠˇ':'島倒', 'ㄉㄠˋ':'到道', 'ㄉㄜˊ':'得德', 'ㄉㄜ˙':'的得', 'ㄉㄥ':'燈登', 'ㄉㄥˇ':'等',
+      'ㄉㄧ':'低滴', 'ㄉㄧˊ':'敵笛', 'ㄉㄧˇ':'底', 'ㄉㄧˋ':'地第弟', 'ㄉㄧㄢ':'顛', 'ㄉㄧㄢˇ':'點典', 'ㄉㄧㄢˋ':'店電', 'ㄉㄧㄠˋ':'掉調', 'ㄉㄧㄝˊ':'蝶疊', 'ㄉㄧㄥ':'丁', 'ㄉㄧㄥˇ':'頂', 'ㄉㄧㄥˋ':'定訂', 'ㄉㄨ':'都督', 'ㄉㄨˊ':'讀毒獨', 'ㄉㄨˇ':'賭堵', 'ㄉㄨˋ':'度肚渡', 'ㄉㄨㄟˋ':'對隊', 'ㄉㄨㄛ':'多', 'ㄉㄨㄛˇ':'朵躲', 'ㄉㄨㄛˋ':'墮',
+      'ㄊㄚ':'他她它', 'ㄊㄚˇ':'塔', 'ㄊㄚˋ':'踏', 'ㄊㄞ':'胎', 'ㄊㄞˊ':'臺台抬', 'ㄊㄞˋ':'太態', 'ㄊㄢ':'灘貪', 'ㄊㄢˊ':'談彈', 'ㄊㄢˋ':'探嘆',
+      'ㄊㄤ':'湯', 'ㄊㄤˊ':'糖堂', 'ㄊㄤˇ':'躺', 'ㄊㄤˋ':'燙', 'ㄊㄠˊ':'桃逃', 'ㄊㄠˇ':'討', 'ㄊㄜˋ':'特', 'ㄊㄥˊ':'疼藤', 'ㄊㄧ':'梯', 'ㄊㄧˊ':'題提', 'ㄊㄧˇ':'體', 'ㄊㄧˋ':'替', 'ㄊㄧㄢ':'天', 'ㄊㄧㄢˊ':'田甜', 'ㄊㄧㄠˊ':'條調', 'ㄊㄧㄥ':'聽', 'ㄊㄧㄥˊ':'停庭', 'ㄊㄨ':'突', 'ㄊㄨˊ':'圖途', 'ㄊㄨˇ':'土', 'ㄊㄨˋ':'兔吐', 'ㄊㄨㄥ':'通', 'ㄊㄨㄥˊ':'同童', 'ㄊㄨㄥˇ':'統桶',
+      'ㄋㄚˊ':'拿', 'ㄋㄚˇ':'哪', 'ㄋㄚˋ':'那納', 'ㄋㄞˇ':'奶乃', 'ㄋㄢˊ':'男南難', 'ㄋㄢˋ':'難', 'ㄋㄤˊ':'囊', 'ㄋㄠˇ':'腦', 'ㄋㄟˋ':'內', 'ㄋㄥˊ':'能',
+      'ㄋㄧˊ':'泥', 'ㄋㄧˇ':'你擬', 'ㄋㄧˋ':'逆膩', 'ㄋㄧㄢˊ':'年黏', 'ㄋㄧㄢˋ':'念', 'ㄋㄧㄤˊ':'娘', 'ㄋㄧㄠˇ':'鳥', 'ㄋㄧㄡˊ':'牛', 'ㄋㄨˇ':'努', 'ㄋㄨˋ':'怒', 'ㄋㄩˇ':'女',
+      'ㄌㄚ':'拉', 'ㄌㄚˋ':'辣蠟', 'ㄌㄞˊ':'來', 'ㄌㄞˋ':'賴', 'ㄌㄢˊ':'藍籃', 'ㄌㄢˇ':'懶', 'ㄌㄤˊ':'狼郎', 'ㄌㄠˇ':'老', 'ㄌㄟˋ':'類累淚', 'ㄌㄥˇ':'冷',
+      'ㄌㄧ':'哩', 'ㄌㄧˊ':'離梨', 'ㄌㄧˇ':'里理李', 'ㄌㄧˋ':'力立利', 'ㄌㄧㄢˊ':'連蓮', 'ㄌㄧㄢˇ':'臉', 'ㄌㄧㄤˊ':'良涼', 'ㄌㄧㄤˇ':'兩', 'ㄌㄧㄠˇ':'了', 'ㄌㄧㄠˋ':'料', 'ㄌㄧㄝˋ':'列烈', 'ㄌㄧㄣˊ':'林鄰', 'ㄌㄧㄥˊ':'零靈', 'ㄌㄧㄥˇ':'領', 'ㄌㄧㄡˊ':'流留劉', 'ㄌㄧㄡˋ':'六', 'ㄌㄨˋ':'路陸錄', 'ㄌㄨㄢˋ':'亂', 'ㄌㄨㄣˊ':'輪', 'ㄌㄨㄛˊ':'羅', 'ㄌㄩˋ':'綠律',
+      'ㄍㄞ':'該', 'ㄍㄞˇ':'改', 'ㄍㄞˋ':'蓋概', 'ㄍㄢ':'甘乾', 'ㄍㄢˇ':'感敢', 'ㄍㄢˋ':'幹', 'ㄍㄤ':'剛鋼', 'ㄍㄠ':'高糕', 'ㄍㄠˇ':'搞稿', 'ㄍㄠˋ':'告',
+      'ㄍㄜ':'歌哥', 'ㄍㄜˊ':'格隔', 'ㄍㄜˇ':'葛', 'ㄍㄜˋ':'個各', 'ㄍㄟˇ':'給', 'ㄍㄣ':'跟根', 'ㄍㄥˋ':'更', 'ㄍㄨ':'姑孤', 'ㄍㄨˇ':'古鼓', 'ㄍㄨˋ':'故顧', 'ㄍㄨㄚ':'瓜', 'ㄍㄨㄞ':'乖', 'ㄍㄨㄢ':'關官', 'ㄍㄨㄢˇ':'管館', 'ㄍㄨㄤ':'光', 'ㄍㄨㄟ':'歸龜', 'ㄍㄨㄟˋ':'貴櫃', 'ㄍㄨㄛ':'鍋', 'ㄍㄨㄛˊ':'國', 'ㄍㄨㄛˇ':'果裹', 'ㄍㄨㄛˋ':'過',
+      'ㄎㄚˇ':'卡', 'ㄎㄞ':'開', 'ㄎㄞˇ':'凱', 'ㄎㄢ':'刊看', 'ㄎㄢˇ':'砍', 'ㄎㄢˋ':'看', 'ㄎㄠˇ':'考烤', 'ㄎㄜ':'科棵', 'ㄎㄜˊ':'殼', 'ㄎㄜˇ':'可渴', 'ㄎㄜˋ':'課客刻', 'ㄎㄨ':'哭枯', 'ㄎㄨˇ':'苦', 'ㄎㄨˋ':'庫褲酷', 'ㄎㄨㄞˋ':'快塊', 'ㄎㄨㄢ':'寬', 'ㄎㄨㄥ':'空', 'ㄎㄨㄥˇ':'孔恐',
+      'ㄏㄞˊ':'還孩', 'ㄏㄞˇ':'海', 'ㄏㄞˋ':'害', 'ㄏㄢˊ':'寒含', 'ㄏㄢˇ':'喊', 'ㄏㄢˋ':'漢汗', 'ㄏㄠ':'蒿', 'ㄏㄠˊ':'豪毫', 'ㄏㄠˇ':'好', 'ㄏㄠˋ':'號耗',
+      'ㄏㄜ':'喝', 'ㄏㄜˊ':'和河合', 'ㄏㄜˋ':'賀鶴', 'ㄏㄟ':'黑', 'ㄏㄣˇ':'很狠', 'ㄏㄥˊ':'橫', 'ㄏㄡˋ':'後厚候', 'ㄏㄨ':'乎呼', 'ㄏㄨˊ':'湖胡', 'ㄏㄨˇ':'虎', 'ㄏㄨˋ':'戶護', 'ㄏㄨㄚ':'花', 'ㄏㄨㄚˊ':'華滑', 'ㄏㄨㄚˋ':'話畫化', 'ㄏㄨㄞˋ':'壞', 'ㄏㄨㄢ':'歡', 'ㄏㄨㄢˊ':'環還', 'ㄏㄨㄢˋ':'換幻', 'ㄏㄨㄤˊ':'黃皇', 'ㄏㄨㄟ':'灰揮', 'ㄏㄨㄟˊ':'回', 'ㄏㄨㄟˋ':'會慧', 'ㄏㄨㄛˊ':'活', 'ㄏㄨㄛˇ':'火夥', 'ㄏㄨㄛˋ':'或貨',
+      'ㄐㄧ':'機雞基', 'ㄐㄧˊ':'及急集', 'ㄐㄧˇ':'幾己', 'ㄐㄧˋ':'記計季', 'ㄐㄧㄚ':'家加', 'ㄐㄧㄚˇ':'假甲', 'ㄐㄧㄚˋ':'架價假', 'ㄐㄧㄢ':'間尖', 'ㄐㄧㄢˇ':'簡減撿', 'ㄐㄧㄢˋ':'見件建', 'ㄐㄧㄤ':'江將', 'ㄐㄧㄤˇ':'講獎', 'ㄐㄧㄤˋ':'將降', 'ㄐㄧㄠ':'教交', 'ㄐㄧㄠˇ':'腳角', 'ㄐㄧㄠˋ':'叫教覺', 'ㄐㄧㄝ':'接街', 'ㄐㄧㄝˊ':'節結潔', 'ㄐㄧㄝˇ':'解姐', 'ㄐㄧㄝˋ':'界借', 'ㄐㄧㄣ':'今金', 'ㄐㄧㄣˇ':'僅緊', 'ㄐㄧㄣˋ':'進近', 'ㄐㄧㄥ':'京精經', 'ㄐㄧㄥˇ':'井景警', 'ㄐㄧㄥˋ':'竟敬鏡', 'ㄐㄧㄡ':'究揪', 'ㄐㄧㄡˇ':'九酒久', 'ㄐㄧㄡˋ':'就舊救', 'ㄐㄩ':'居', 'ㄐㄩˊ':'局菊', 'ㄐㄩˇ':'舉', 'ㄐㄩˋ':'句具巨', 'ㄐㄩㄢ':'捐圈', 'ㄐㄩㄝˊ':'覺決絕', 'ㄐㄩㄣ':'軍君', 'ㄐㄩㄣˋ':'俊郡',
+      'ㄑㄧ':'七期妻', 'ㄑㄧˊ':'其期騎', 'ㄑㄧˇ':'起企', 'ㄑㄧˋ':'氣器汽', 'ㄑㄧㄚˋ':'恰', 'ㄑㄧㄢ':'千牽', 'ㄑㄧㄢˊ':'前錢', 'ㄑㄧㄢˇ':'淺', 'ㄑㄧㄢˋ':'欠', 'ㄑㄧㄤˊ':'強牆', 'ㄑㄧㄠ':'敲', 'ㄑㄧㄠˊ':'橋喬', 'ㄑㄧㄝˇ':'且', 'ㄑㄧㄣ':'親', 'ㄑㄧㄣˊ':'琴勤', 'ㄑㄧㄥ':'清青輕', 'ㄑㄧㄥˊ':'情晴', 'ㄑㄧㄥˇ':'請', 'ㄑㄧㄡ':'秋', 'ㄑㄧㄡˊ':'球求', 'ㄑㄩ':'區曲', 'ㄑㄩˇ':'取曲', 'ㄑㄩˋ':'去趣', 'ㄑㄩㄢˊ':'全權泉', 'ㄑㄩㄝˋ':'卻確', 'ㄑㄩㄣˊ':'群',
+      'ㄒㄧ':'西希吸', 'ㄒㄧˊ':'習席', 'ㄒㄧˇ':'喜洗', 'ㄒㄧˋ':'系細戲', 'ㄒㄧㄚ':'蝦', 'ㄒㄧㄚˊ':'霞俠', 'ㄒㄧㄚˋ':'下夏', 'ㄒㄧㄢ':'先仙', 'ㄒㄧㄢˊ':'閒賢', 'ㄒㄧㄢˇ':'顯險', 'ㄒㄧㄢˋ':'現線', 'ㄒㄧㄤ':'香鄉', 'ㄒㄧㄤˊ':'詳祥', 'ㄒㄧㄤˇ':'想響', 'ㄒㄧㄤˋ':'向像象', 'ㄒㄧㄠ':'消蕭', 'ㄒㄧㄠˇ':'小曉', 'ㄒㄧㄠˋ':'笑校', 'ㄒㄧㄝ':'些', 'ㄒㄧㄝˊ':'鞋協', 'ㄒㄧㄝˇ':'寫血', 'ㄒㄧㄝˋ':'謝', 'ㄒㄧㄣ':'心新', 'ㄒㄧㄣˋ':'信', 'ㄒㄧㄥ':'星興', 'ㄒㄧㄥˊ':'行形型', 'ㄒㄧㄥˇ':'醒省', 'ㄒㄩ':'需須', 'ㄒㄩˇ':'許', 'ㄒㄩˋ':'續序', 'ㄒㄩㄢ':'宣', 'ㄒㄩㄢˇ':'選', 'ㄒㄩㄝˊ':'學', 'ㄒㄩㄣˊ':'尋',
+      'ㄓ':'之知支', 'ㄓˊ':'直職值', 'ㄓˇ':'只紙指', 'ㄓˋ':'至製治', 'ㄓㄚ':'渣', 'ㄓㄚˊ':'炸閘', 'ㄓㄚˋ':'炸', 'ㄓㄞ':'摘', 'ㄓㄞˊ':'宅', 'ㄓㄞˇ':'窄', 'ㄓㄢ':'站沾', 'ㄓㄢˇ':'展', 'ㄓㄢˋ':'站戰', 'ㄓㄤ':'張章', 'ㄓㄤˇ':'長掌', 'ㄓㄤˋ':'帳丈', 'ㄓㄠ':'招朝', 'ㄓㄠˇ':'找早', 'ㄓㄠˋ':'照趙', 'ㄓㄜ':'遮', 'ㄓㄜˊ':'折哲', 'ㄓㄜˇ':'者', 'ㄓㄜˋ':'這', 'ㄓㄣ':'真針', 'ㄓㄣˇ':'枕診', 'ㄓㄣˋ':'陣震', 'ㄓㄥ':'爭正', 'ㄓㄥˇ':'整', 'ㄓㄥˋ':'正政', 'ㄓㄡ':'周州', 'ㄓㄡˊ':'軸', 'ㄓㄡˇ':'肘', 'ㄓㄡˋ':'皺', 'ㄓㄨ':'朱珠', 'ㄓㄨˊ':'竹逐', 'ㄓㄨˇ':'主煮', 'ㄓㄨˋ':'住注祝', 'ㄓㄨㄚ':'抓', 'ㄓㄨㄞˇ':'跩', 'ㄓㄨㄢ':'專磚', 'ㄓㄨㄢˇ':'轉', 'ㄓㄨㄤ':'裝莊', 'ㄓㄨㄤˋ':'狀撞', 'ㄓㄨㄟ':'追', 'ㄓㄨㄟˋ':'最墜', 'ㄓㄨㄣˇ':'準', 'ㄓㄨㄥ':'中鐘', 'ㄓㄨㄥˇ':'種', 'ㄓㄨㄥˋ':'重種',
+      'ㄔ':'吃', 'ㄔˊ':'持池遲', 'ㄔˇ':'尺齒恥', 'ㄔˋ':'赤翅', 'ㄔㄚ':'插', 'ㄔㄚˊ':'茶查', 'ㄔㄚˋ':'差', 'ㄔㄞ':'拆', 'ㄔㄞˊ':'柴', 'ㄔㄢˇ':'產鏟', 'ㄔㄤ':'昌', 'ㄔㄤˊ':'常長', 'ㄔㄤˇ':'場廠', 'ㄔㄤˋ':'唱', 'ㄔㄠ':'超', 'ㄔㄠˊ':'朝潮', 'ㄔㄠˇ':'吵炒', 'ㄔㄜ':'車', 'ㄔㄣˊ':'陳沉', 'ㄔㄥ':'稱', 'ㄔㄥˊ':'成城乘', 'ㄔㄥˇ':'逞', 'ㄔㄨ':'出初', 'ㄔㄨˊ':'除廚', 'ㄔㄨˇ':'處楚', 'ㄔㄨˋ':'處觸', 'ㄔㄨㄢ':'川穿', 'ㄔㄨㄢˊ':'船傳', 'ㄔㄨㄤ':'窗', 'ㄔㄨㄤˊ':'床', 'ㄔㄨㄟ':'吹', 'ㄔㄨㄣ':'春', 'ㄔㄨㄣˊ':'純唇',
+      'ㄕ':'詩師', 'ㄕˊ':'十時實', 'ㄕˇ':'使始史', 'ㄕˋ':'是事市', 'ㄕㄚ':'沙', 'ㄕㄚˇ':'傻', 'ㄕㄚˋ':'煞', 'ㄕㄞˋ':'曬', 'ㄕㄢ':'山衫', 'ㄕㄢˇ':'閃', 'ㄕㄢˋ':'善扇', 'ㄕㄤ':'商傷', 'ㄕㄤˇ':'賞', 'ㄕㄤˋ':'上尚', 'ㄕㄠ':'燒稍', 'ㄕㄠˇ':'少', 'ㄕㄠˋ':'少哨', 'ㄕㄜˊ':'舌', 'ㄕㄜˇ':'捨', 'ㄕㄜˋ':'社設', 'ㄕㄣ':'身深', 'ㄕㄣˊ':'神', 'ㄕㄣˇ':'審', 'ㄕㄥ':'生聲', 'ㄕㄥˊ':'繩', 'ㄕㄥˇ':'省', 'ㄕㄥˋ':'勝聖', 'ㄕㄡ':'收', 'ㄕㄡˇ':'手首', 'ㄕㄡˋ':'受售瘦', 'ㄕㄨ':'書輸', 'ㄕㄨˊ':'熟', 'ㄕㄨˇ':'數屬暑', 'ㄕㄨˋ':'樹數術', 'ㄕㄨㄞ':'摔', 'ㄕㄨㄞˇ':'甩', 'ㄕㄨㄞˋ':'帥率', 'ㄕㄨㄢ':'栓', 'ㄕㄨㄤ':'雙霜', 'ㄕㄨㄟˇ':'水', 'ㄕㄨㄟˋ':'睡稅', 'ㄕㄨㄣˋ':'順', 'ㄕㄨㄛ':'說',
+      'ㄖˊ':'兒', 'ㄖˋ':'日', 'ㄖㄢˊ':'然燃', 'ㄖㄤˋ':'讓', 'ㄖㄠˋ':'繞', 'ㄖㄜˋ':'熱', 'ㄖㄣˊ':'人仁', 'ㄖㄣˇ':'忍', 'ㄖㄣˋ':'任認', 'ㄖㄥ': '扔', 'ㄖㄨˊ':'如', 'ㄖㄨˇ':'乳', 'ㄖㄨˋ':'入', 'ㄖㄨㄢˇ':'軟', 'ㄖㄨㄥˊ':'容榮',
+      'ㄗ':'資姿', 'ㄗˇ':'子紫', 'ㄗˋ':'字自', 'ㄗㄞ':'栽', 'ㄗㄞˇ':'仔載', 'ㄗㄞˋ':'在再', 'ㄗㄢˇ':'攢', 'ㄗㄤ':'髒', 'ㄗㄠ':'遭糟', 'ㄗㄠˇ':'早澡', 'ㄗㄠˋ':'造', 'ㄗㄜˊ':'則責', 'ㄗㄣˇ':'怎', 'ㄗㄥ':'增曾', 'ㄗㄡˇ':'走', 'ㄗㄨ':'租', 'ㄗㄨˊ':'足族', 'ㄗㄨˇ':'組祖', 'ㄗㄨㄟˇ':'嘴', 'ㄗㄨㄟˋ':'最罪', 'ㄗㄨㄛ':'作', 'ㄗㄨㄛˊ':'昨', 'ㄗㄨㄛˇ':'左', 'ㄗㄨㄛˋ':'做坐座',
+      'ㄘ':'次詞', 'ㄘˊ':'詞辭慈', 'ㄘˇ':'此', 'ㄘˋ':'次刺', 'ㄘㄞ':'猜', 'ㄘㄞˊ':'才材財', 'ㄘㄞˇ':'彩採', 'ㄘㄞˋ':'菜', 'ㄘㄢ':'參餐', 'ㄘㄤ':'倉', 'ㄘㄠˇ':'草', 'ㄘㄜˋ':'側冊測', 'ㄘㄥˊ':'層曾', 'ㄘㄨ':'粗', 'ㄘㄨㄣ':'村', 'ㄘㄨㄛˋ':'錯措',
+      'ㄙ':'思絲', 'ㄙˇ':'死', 'ㄙˋ':'四似寺', 'ㄙㄞ':'塞', 'ㄙㄞˋ':'賽', 'ㄙㄢ':'三', 'ㄙㄢˇ':'傘散', 'ㄙㄢˋ':'散', 'ㄙㄠˇ':'掃嫂', 'ㄙㄜˋ':'色', 'ㄙㄣ':'森', 'ㄙㄨ':'蘇酥', 'ㄙㄨˊ':'俗', 'ㄙㄨˋ':'速素宿', 'ㄙㄨㄢ':'酸', 'ㄙㄨㄢˋ':'算', 'ㄙㄨㄟˊ':'隨', 'ㄙㄨㄟˋ':'歲碎', 'ㄙㄨㄛˇ':'所鎖',
+      'ㄧ':'一衣醫', 'ㄧˊ':'移宜疑', 'ㄧˇ':'以已椅', 'ㄧˋ':'意義易', 'ㄧㄚ':'鴨壓', 'ㄧㄚˊ':'牙芽', 'ㄧㄚˇ':'雅', 'ㄧㄚˋ':'亞', 'ㄧㄢ':'煙淹', 'ㄧㄢˊ':'言研', 'ㄧㄢˇ':'眼演', 'ㄧㄢˋ':'驗燕', 'ㄧㄤ':'央秧', 'ㄧㄤˊ':'羊陽楊', 'ㄧㄤˇ':'養氧', 'ㄧㄤˋ':'樣', 'ㄧㄠ':'腰邀', 'ㄧㄠˊ':'搖姚', 'ㄧㄠˇ':'咬', 'ㄧㄠˋ':'要藥', 'ㄧㄝ':'耶', 'ㄧㄝˊ':'爺', 'ㄧㄝˇ':'也野', 'ㄧㄝˋ':'夜業葉', 'ㄧㄣ':'因音陰', 'ㄧㄣˊ':'銀', 'ㄧㄣˇ':'引飲', 'ㄧㄣˋ':'印', 'ㄧㄥ':'英應', 'ㄧㄥˊ':'營迎贏', 'ㄧㄥˇ':'影', 'ㄧㄥˋ':'應硬', 'ㄧㄡ':'優悠', 'ㄧㄡˊ':'由油游', 'ㄧㄡˇ':'有友', 'ㄧㄡˋ':'又右幼',
+      'ㄨ':'屋烏', 'ㄨˊ':'無吳', 'ㄨˇ':'五午舞', 'ㄨˋ':'物務霧', 'ㄨㄚ':'挖蛙', 'ㄨㄚˊ':'娃', 'ㄨㄞ':'歪', 'ㄨㄞˋ':'外', 'ㄨㄢ':'灣彎', 'ㄨㄢˊ':'完玩', 'ㄨㄢˇ':'晚碗', 'ㄨㄢˋ':'萬', 'ㄨㄤˊ':'王', 'ㄨㄤˇ':'往網', 'ㄨㄤˋ':'望忘', 'ㄨㄟ':'威微', 'ㄨㄟˊ':'為圍', 'ㄨㄟˇ':'委尾偉', 'ㄨㄟˋ':'為位未', 'ㄨㄣ':'溫', 'ㄨㄣˊ':'文聞', 'ㄨㄣˇ':'穩吻', 'ㄨㄣˋ':'問', 'ㄨㄥ':'翁',
+      'ㄩ':'淤', 'ㄩˊ':'於魚餘', 'ㄩˇ':'與雨語', 'ㄩˋ':'玉育遇', 'ㄩㄢ':'冤', 'ㄩㄢˊ':'元原園', 'ㄩㄢˇ':'遠', 'ㄩㄢˋ':'院願', 'ㄩㄝ':'約', 'ㄩㄝˋ':'月越樂', 'ㄩㄣ':'暈', 'ㄩㄣˊ':'雲', 'ㄩㄣˇ':'允', 'ㄩㄣˋ':'運',
+      'ㄚ':'啊阿', 'ㄚˊ':'啊', 'ㄚˇ':'啊', 'ㄚˋ':'啊', 'ㄛ':'喔噢', 'ㄜ':'婀', 'ㄜˊ':'鵝額', 'ㄜˇ':'噁', 'ㄜˋ':'餓惡', 'ㄞ':'哀挨', 'ㄞˊ':'癌', 'ㄞˇ':'矮', 'ㄞˋ':'愛礙', 'ㄠ':'凹', 'ㄠˊ':'熬', 'ㄠˇ':'襖', 'ㄠˋ':'澳奧', 'ㄡ':'歐', 'ㄡˇ':'偶', 'ㄢ':'安', 'ㄢˊ':'俺', 'ㄢˇ':'俺', 'ㄢˋ':'按暗案', 'ㄣ':'恩', 'ㄤ':'骯', 'ㄤˊ':'昂', 'ㄦˊ':'兒而', 'ㄦˇ':'耳爾', 'ㄦˋ':'二'
+    };
+
+    const els = Object.fromEntries(['inputDisplay','keyCount','backspace','clearAll','commitSyllable','convert','hanzi','resultNote','candidates','voiceSelect','rate','rateValue','speak','speechStatus','largeText','highContrast'].map(id => [id, document.getElementById(id)]));
+    let syllables = [];
+    let current = '';
+    let resultChars = [];
+    let candidateIndex = 0;
+    const toneSet = new Set(groups.tones);
+
+    function makeKeyboard() {
+      const container = document.getElementById('computerKeyboard');
+      keyboardRows.forEach((rowData, rowIndex) => {
+        const row = document.createElement('div');
+        row.className = `keyboard-row row-${rowIndex + 1}`;
+        rowData.forEach(([symbol, physicalKey]) => {
+          const tone = groups.tones.includes(symbol);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `key${tone ? ' tone' : ''}`;
+          button.innerHTML = `<span class="key-main" aria-hidden="true">${symbol}</span><span class="key-legend" aria-hidden="true">${physicalKey}</span>`;
+          button.setAttribute('aria-label', `${tone ? toneNames[symbol] : `注音 ${symbol}`}，實體鍵盤 ${physicalKey}`);
+          button.title = `實體鍵盤：${physicalKey}`;
+        button.addEventListener('click', () => addSymbol(symbol));
+          row.appendChild(button);
+        });
+        container.appendChild(row);
+      });
+    }
+
+    makeKeyboard();
+
+    function normalizeSyllable(value) {
+      if (value.endsWith('ˉ')) return value.slice(0, -1);
+      return value;
+    }
+
+    function addSymbol(symbol) {
+      if (toneSet.has(symbol)) {
+        current = current.replace(/[ˉˊˇˋ˙]/g, '');
+        if (symbol !== 'ˉ') current += symbol;
+      } else {
+        current += symbol;
+      }
+      renderInput();
+    }
+
+    function commitCurrent() {
+      const normalized = normalizeSyllable(current);
+      if (!normalized) return false;
+      syllables.push(normalized);
+      current = '';
+      renderInput();
+      return true;
+    }
+
+    function allSyllables() {
+      return [...syllables, ...(current ? [normalizeSyllable(current)] : [])];
+    }
+
+    function renderInput() {
+      els.inputDisplay.innerHTML = '';
+      const list = allSyllables();
+      if (!list.length) els.inputDisplay.innerHTML = '<span class="placeholder">請從下方點選注音符號</span>';
+      syllables.forEach((item, index) => {
+        const chip = document.createElement('span');
+        chip.className = 'syllable-chip';
+        chip.textContent = item;
+        chip.setAttribute('aria-label', `第 ${index + 1} 個音節 ${item}`);
+        els.inputDisplay.appendChild(chip);
+      });
+      if (current) {
+        const chip = document.createElement('span');
+        chip.className = 'syllable-chip current';
+        chip.textContent = current;
+        chip.setAttribute('aria-label', `正在輸入 ${current}`);
+        els.inputDisplay.appendChild(chip);
+      }
+      const count = list.join('').length;
+      els.keyCount.textContent = `已輸入 ${count} 個符號・${list.length} 個音節`;
+      els.convert.disabled = list.length === 0;
+    }
+
+    function getCandidates(syllable) {
+      return dictionary[syllable] || dictionary[syllable.replace(/[ˊˇˋ˙]/g, '')] || '';
+    }
+
+    function convertInput() {
+      if (current) commitCurrent();
+      if (!syllables.length) return;
+      resultChars = syllables.map(s => getCandidates(s)?.[0] || '□');
+      candidateIndex = 0;
+      renderResult();
+      const missing = syllables.filter(s => !getCandidates(s));
+      els.resultNote.textContent = missing.length
+        ? `找不到「${missing.join('、')}」的內建候選，已用 □ 標示；可刪除後重新輸入。`
+        : '已先選用常用字。點下方候選字，可替換目前選取的音節。';
+    }
+
+    function renderResult() {
+      els.hanzi.innerHTML = '';
+      if (!resultChars.length) {
+        els.hanzi.innerHTML = '<span class="empty-result">國字會顯示在這裡</span>';
+        els.speak.disabled = true;
+        return;
+      }
+      resultChars.forEach((char, index) => {
+        const span = document.createElement('span');
+        span.textContent = char;
+        span.style.cursor = 'pointer';
+        span.style.borderRadius = '8px';
+        span.style.background = index === candidateIndex ? 'var(--orange-soft)' : 'transparent';
+        span.setAttribute('role', 'button');
+        span.setAttribute('tabindex', '0');
+        span.setAttribute('aria-label', `第 ${index + 1} 字 ${char}，顯示候選字`);
+        span.setAttribute('aria-pressed', String(index === candidateIndex));
+        const choose = () => { candidateIndex = index; renderResult(); renderCandidates(); };
+        span.addEventListener('click', choose);
+        span.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); } });
+        els.hanzi.appendChild(span);
+      });
+      els.speak.disabled = resultChars.includes('□') || !('speechSynthesis' in window);
+      renderCandidates();
+    }
+
+    function renderCandidates() {
+      els.candidates.innerHTML = '';
+      const chars = [...(getCandidates(syllables[candidateIndex]) || '')];
+      if (!chars.length) {
+        els.candidates.innerHTML = '<span class="hint">這個音節沒有內建候選字</span>';
+        return;
+      }
+      chars.slice(0, 12).forEach(char => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `candidate${resultChars[candidateIndex] === char ? ' selected' : ''}`;
+        button.textContent = char;
+        button.setAttribute('aria-label', `選擇 ${char}`);
+        button.setAttribute('aria-pressed', String(resultChars[candidateIndex] === char));
+        button.addEventListener('click', () => { resultChars[candidateIndex] = char; renderResult(); });
+        els.candidates.appendChild(button);
+      });
+    }
+
+    els.commitSyllable.addEventListener('click', commitCurrent);
+    els.convert.addEventListener('click', convertInput);
+    function deleteLast() {
+      if (current) current = [...current].slice(0, -1).join('');
+      else if (syllables.length) current = syllables.pop();
+      renderInput();
+    }
+    els.backspace.addEventListener('click', deleteLast);
+    els.clearAll.addEventListener('click', () => {
+      window.speechSynthesis?.cancel();
+      syllables = []; current = ''; resultChars = []; candidateIndex = 0;
+      renderInput(); renderResult();
+      els.candidates.innerHTML = '<span class="hint">轉換後可在此改選</span>';
+      els.resultNote.textContent = '輸入一個或多個音節，再按「轉成國字」。';
+      els.speechStatus.textContent = '';
+    });
+
+    els.rate.addEventListener('input', () => { els.rateValue.value = `${els.rate.value}×`; });
+
+    document.addEventListener('keydown', event => {
+      if (event.ctrlKey || event.altKey || event.metaKey) return;
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) return;
+      const symbol = physicalKeyMap[event.key.toLowerCase()];
+      if (symbol) {
+        event.preventDefault();
+        addSymbol(symbol);
+      } else if (event.key === 'Backspace') {
+        event.preventDefault();
+        deleteLast();
+      }
+    });
+
+    function setDisplayPreference(button, className, enabled) {
+      document.body.classList.toggle(className, enabled);
+      button.setAttribute('aria-pressed', String(enabled));
+      try { localStorage.setItem(`zhuyin-${className}`, String(enabled)); } catch (_) {}
+    }
+
+    [['largeText','large-text'], ['highContrast','high-contrast']].forEach(([buttonId, className]) => {
+      const button = els[buttonId];
+      let enabled = false;
+      try { enabled = localStorage.getItem(`zhuyin-${className}`) === 'true'; } catch (_) {}
+      setDisplayPreference(button, className, enabled);
+      button.addEventListener('click', () => setDisplayPreference(button, className, !document.body.classList.contains(className)));
+    });
+
+    function loadVoices() {
+      if (!('speechSynthesis' in window)) {
+        els.voiceSelect.innerHTML = '<option>此瀏覽器不支援語音朗讀</option>';
+        els.speechStatus.textContent = '請改用支援 Web Speech API 的瀏覽器。';
+        return;
+      }
+      const voices = speechSynthesis.getVoices();
+      const chinese = voices.filter(v => /^zh(-|_)/i.test(v.lang));
+      const usable = chinese.length ? chinese : voices;
+      els.voiceSelect.innerHTML = '';
+      if (!usable.length) {
+        els.voiceSelect.innerHTML = '<option>使用瀏覽器預設語音</option>';
+        return;
+      }
+      usable.forEach((voice, index) => {
+        const option = document.createElement('option');
+        option.value = voice.name;
+        option.textContent = `${voice.name}（${voice.lang}）`;
+        if (/zh[-_]TW/i.test(voice.lang) && index === usable.findIndex(v => /zh[-_]TW/i.test(v.lang))) option.selected = true;
+        els.voiceSelect.appendChild(option);
+      });
+    }
+
+    loadVoices();
+    if ('speechSynthesis' in window) speechSynthesis.addEventListener('voiceschanged', loadVoices);
+
+    function speakResult() {
+      const text = resultChars.join('');
+      if (!text || !('speechSynthesis' in window)) return;
+      speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      const voice = speechSynthesis.getVoices().find(v => v.name === els.voiceSelect.value);
+      if (voice) utterance.voice = voice;
+      utterance.lang = voice?.lang || 'zh-TW';
+      utterance.rate = Number(els.rate.value);
+      utterance.onstart = () => { els.speechStatus.textContent = `正在朗讀「${text}」`; };
+      utterance.onend = () => { els.speechStatus.textContent = '朗讀完成'; };
+      utterance.onerror = () => { els.speechStatus.textContent = '無法朗讀，請改選其他中文語音。'; };
+      speechSynthesis.speak(utterance);
+    }
+    els.speak.addEventListener('click', speakResult);
+
+    // WebMCP：在支援的瀏覽器中，讓輔助代理使用與畫面相同的操作。
+    if (document.modelContext?.registerTool) {
+      const register = (tool) => Promise.resolve(document.modelContext.registerTool(tool)).catch(() => {});
+      register({
+        name: 'set_zhuyin_syllables', title: '設定注音音節',
+        description: '以注音字串陣列取代目前輸入，並同步更新畫面。',
+        inputSchema: { type: 'object', properties: { syllables: { type: 'array', items: { type: 'string' }, minItems: 1 } }, required: ['syllables'], additionalProperties: false },
+        annotations: { readOnlyHint: false, untrustedContentHint: false },
+        execute(input) {
+          if (!Array.isArray(input?.syllables) || input.syllables.length === 0 || input.syllables.some(s => typeof s !== 'string' || !s.trim())) throw new Error('syllables 必須是非空白注音字串陣列');
+          syllables = input.syllables.map(normalizeSyllable); current = ''; resultChars = []; renderInput(); renderResult();
+          return { syllables };
+        }
+      });
+      register({
+        name: 'convert_zhuyin_to_hanzi', title: '將注音轉成國字',
+        description: '把目前畫面中的注音音節轉成常用國字候選並更新結果。',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        annotations: { readOnlyHint: false, untrustedContentHint: false },
+        execute() { if (!allSyllables().length) throw new Error('請先輸入注音'); convertInput(); return { text: resultChars.join(''), hasUnknown: resultChars.includes('□') }; }
+      });
+      register({
+        name: 'speak_hanzi_result', title: '朗讀國字結果',
+        description: '使用瀏覽器 Web Speech API 朗讀目前轉換結果。',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        annotations: { readOnlyHint: false, untrustedContentHint: false },
+        execute() { if (!resultChars.length || resultChars.includes('□')) throw new Error('目前沒有可朗讀的完整國字結果'); speakResult(); return { speaking: resultChars.join('') }; }
+      });
+    }
+
+    renderInput();
+  </script>
+</body>
+</html>
